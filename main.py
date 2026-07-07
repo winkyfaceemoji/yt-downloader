@@ -14,11 +14,16 @@ def download_metadata_only(info : dict):
     video_Title = video_data["title"] or "unknown"
     file_id = sanitize_filename(f"{video_Title}_{uploader}_{today}_data")
 
+    #Sort the fetched comments most-liked first (like_count may be None -> treat as 0)
+    comments = video_data.get("comments") or []
+    comments.sort(key=lambda c: int(c.get("like_count") or 0), reverse=True)
+    video_data["comments"] = comments
+
     #Write metadata JSON to Data/<file_id>.json
     directory = os.path.join(os.getcwd(),"Data")
     os.makedirs(directory, exist_ok=True)
     file_path = os.path.join(directory,f"{file_id}.json")
-    
+
     with open(file_path, "w") as json_file:
         json.dump(video_data, json_file, indent=4)
 
