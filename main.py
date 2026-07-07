@@ -22,7 +22,7 @@ def download_metadata_only(info : dict):
     with open(file_path, "w") as json_file:
         json.dump(video_data, json_file, indent=4)
 
-def download_audio_only(info : dict):
+def download_audio_only(url : str):
     # Save audio under an Audio/ folder (created if missing)
     os.makedirs("Audio", exist_ok=True)
 
@@ -31,28 +31,32 @@ def download_audio_only(info : dict):
     audio_opts = {
         'format': 'bestaudio',                                  # Audio-only stream; error out rather than fall back to full video
         'outtmpl': os.path.join('Audio', '%(title)s.%(ext)s'),  # Save under Audio/ with the video title
+        'noplaylist': True,                                     # Same as the metadata pass: a watch?v=...&list=... URL is just the video
         'js_runtimes': JS_RUNTIMES,
         'quiet': False,                                         # Keep False to see download logs in stdout
     }
 
-    # Reuse the already-extracted info dict instead of re-fetching the URL
-    # (same mechanism yt-dlp uses for --load-info-json)
+    # Re-extract fresh for the download. Reusing the metadata info dict fails with
+    # HTTP 403 because its format URLs come from a client whose URLs now require a
+    # PO token; a fresh download lets yt-dlp pick a client that yields a usable URL.
     with yt_dlp.YoutubeDL(audio_opts) as ydl:
-        ydl.process_ie_result(dict(info), download=True)
+        ydl.download([url])
 
 
 #1. initiate variables
 URL = ''
-JS_RUNTIMES = {'node': {}} 
+JS_RUNTIMES = {'node': {}}
 
 ydl_opts = {
     'getcomments': True,             # Force fetching the comments list
     'skip_download': True,           # Bypass downloading the video file
     'extract_flat': False,           # Ensure complete metadata parsing
     'noplaylist': True,              # For a watch?v=...&list=... URL, take only the video
-    'sleep_interval_requests': 1,    # 1s between API requests; reduces "Incomplete data received" retries on high-comment videos
+    #'sleep_interval_requests': 1,    # 1s between API requests; reduces "Incomplete data received" retries on high-comment videos
+    'extractor_args': {'youtube': {'comment_sort': ['top'],      # Sort by top comments (default is newest)
+                                   'max_comments': ['1000']}},   # Cap at the top 1000 comments
     'js_runtimes': JS_RUNTIMES,    # Use Node to sign YouTube URLs (avoids unavailable/403 errors); shared by both configs
-    'quiet': True,                   # Keep the console output clean
+    'quiet': False,                   # Keep the console output clean
 }
 
 try:
@@ -79,6 +83,6 @@ except Exception as e:
 #3. Download Metadata
 download_metadata_only(m_data)
 
-#4. Download the audio, reusing the metadata extracted in step 4 (no second fetch)
-download_audio_only(m_data)
+#4. Download the audio (re-extracts fresh from the URL to get a downloadable format)
+download_audio_only(URL)
 
