@@ -10,8 +10,8 @@ It does not download the video itself. Extraction and download are powered by
 
 ## What it does
 
-`main.py` targets a single video URL (the `URL` variable near the top of the file) and
-runs in three steps:
+`main.py` prompts for a single YouTube video URL when run, then processes it in three
+steps:
 
 **1. Extract once** — a single yt-dlp call (`ydl_opts`) pulls the full metadata,
 including the comments list, without downloading the media:
@@ -19,8 +19,15 @@ including the comments list, without downloading the media:
 - `getcomments: True` — fetch the full comments list
 - `skip_download: True` — read metadata only, don't download the video
 - `extract_flat: False` — parse the complete metadata
+- `noplaylist: True` — for a `watch?v=…&list=…` URL, process only the video
+- `sleep_interval_requests: 1` — wait 1s between API requests to avoid throttling (see Notes)
 - `js_runtimes: {'node': {}}` — use Node to sign YouTube requests (see Requirements)
 - `quiet: True` — suppress yt-dlp's normal console noise
+
+This tool handles **one video at a time**. If you paste a playlist URL, the script
+detects it up front (before any heavy extraction) and exits with a message rather than
+bulk-processing every video. A `watch?v=…&list=…` link is treated as just the single
+video.
 
 **2. Save metadata** (`download_metadata_only`) — writes the sanitized,
 JSON-serializable info to:
@@ -69,10 +76,16 @@ On CMD, activate with `.venv\Scripts\activate` instead.
 python main.py
 ```
 
-Edit the `URL` variable near the top of `main.py` to target a different video.
+The script prompts `Input the Youtube URL` — paste a YouTube video URL and press Enter.
 
 ## Notes
 
+- On videos with many comments you may see repeated `Incomplete data received …
+  Giving up after 3 retries` warnings. These are **non-fatal** — YouTube occasionally
+  returns an incomplete comment page, so yt-dlp skips that page and continues (you may
+  end up with slightly fewer comments than the true total). `sleep_interval_requests`
+  reduces how often this happens; raise it (e.g. to `2`) if the warnings persist, at
+  the cost of a slower run.
 - You may see a warning like `n challenge solving failed: Some formats may be
   missing`. It is non-fatal — the best audio stream still downloads. Resolving it
   fully requires yt-dlp's EJS challenge-solver distribution; see the

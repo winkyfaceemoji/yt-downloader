@@ -42,21 +42,39 @@ def download_audio_only(info : dict):
 
 
 #1. initiate variables
-URL = 'https://www.youtube.com/watch?v=ZVeQQHEkcAk'
+URL = ''
 JS_RUNTIMES = {'node': {}} 
 
 ydl_opts = {
     'getcomments': True,             # Force fetching the comments list
     'skip_download': True,           # Bypass downloading the video file
     'extract_flat': False,           # Ensure complete metadata parsing
+    'noplaylist': True,              # For a watch?v=...&list=... URL, take only the video
+    'sleep_interval_requests': 1,    # 1s between API requests; reduces "Incomplete data received" retries on high-comment videos
     'js_runtimes': JS_RUNTIMES,    # Use Node to sign YouTube URLs (avoids unavailable/403 errors); shared by both configs
     'quiet': True,                   # Keep the console output clean
 }
 
-#2. Grab the URL
-with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-    #2a. extract the video info
-    m_data = ydl.extract_info(URL, download=False)
+try:
+    #2. Grab the Youtube URL
+    URL = input('Input the Youtube URL: ')
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        #2a. Peek at the result type first. process=False skips the expensive
+        #    per-video extraction and comment fetching, so a playlist is rejected
+        #    up front instead of after minutes of work.
+        result = ydl.extract_info(URL, download=False, process=False)
+
+        #2b. Guard: this tool handles one video at a time, not playlists
+        if result.get('_type') in ('playlist', 'multi_video'):
+            raise SystemExit('That URL is a playlist. Please provide a single video URL.')
+
+        #2c. Fully process the single video (fetches comments, resolves formats)
+        m_data = ydl.process_ie_result(result, download=False)
+
+except Exception as e:
+    print(e)
+    raise SystemExit(1)
 
 #3. Download Metadata
 download_metadata_only(m_data)
