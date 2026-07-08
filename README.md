@@ -1,12 +1,11 @@
 # yt-downloader
 
-A small Python script that, for a single YouTube video, does two things:
+A small Python script that, for a single YouTube video:
 
 1. **Extracts metadata** — including the top comments (most-liked first) — and saves it as JSON.
-2. **Downloads the audio** track as a standalone file.
+2. **Downloads the audio and/or video** — you choose which at runtime.
 
-It does not download the video itself. Extraction and download are powered by
-[yt-dlp](https://github.com/yt-dlp/yt-dlp).
+Extraction and downloads are powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
 ## What it does
 
@@ -44,20 +43,21 @@ with characters illegal on Windows (`:`, `?`, `|`, …) are handled safely; a mi
 title or uploader falls back to `unknown`. Before saving, the fetched comments are
 re-ordered **most-liked first** (by `like_count`).
 
-**3. Download audio** (`download_audio_only`) — re-extracts the URL fresh (a second
-network fetch) and downloads:
+**3. Download media** — prompts `Download (a)udio, (v)ideo, or (b)oth?` and runs the
+matching download(s). Each does its own fresh re-extraction of the URL:
 
-- `format: 'bestaudio'` — best audio-only stream (errors out rather than falling
-  back to a full video download)
-- native container (usually `.webm`/opus or `.m4a`), with **no re-encoding**, so
-  ffmpeg is not required
-- saved to `Audio/<title>.<ext>`
+- **Audio** (`download_audio_only`) — `format: 'bestaudio'`, saved in its native
+  container (usually `.webm`/opus or `.m4a`) with **no re-encoding**, to
+  `Audio/<title>.<ext>`. Does not need ffmpeg.
+- **Video** (`download_video`) — `format: 'bestvideo+bestaudio/best'`, merged by
+  ffmpeg into a single full-resolution `.mp4` at `Video/<title>.mp4`. **Requires
+  ffmpeg.**
 
-The audio step deliberately re-extracts instead of reusing step 1's data: those
-metadata format URLs now require a PO token and fail the download with `HTTP 403`,
-whereas a fresh extraction lets yt-dlp negotiate a client that yields a usable URL.
+Each step re-extracts fresh instead of reusing step 1's data: those metadata format
+URLs now require a PO token and fail the download with `HTTP 403`, whereas a fresh
+extraction lets yt-dlp negotiate a client that yields a usable URL.
 
-Both `Data/` and `Audio/` are created automatically and are git-ignored.
+`Data/`, `Audio/`, and `Video/` are created automatically and are git-ignored.
 
 ## Requirements
 
@@ -65,6 +65,8 @@ Both `Data/` and `Audio/` are created automatically and are git-ignored.
 - `yt-dlp` (see `requirements.txt`)
 - **Node.js** on your PATH — yt-dlp uses it to solve YouTube's signature challenge.
   Without a JavaScript runtime, downloads fail with `HTTP 403` / "Video unavailable".
+- **ffmpeg** on your PATH — required only for **video** downloads (it merges the
+  separate video and audio streams). Audio-only downloads don't need it.
 
 ## Setup
 
@@ -85,6 +87,8 @@ python main.py
 ```
 
 The script prompts `Input the Youtube URL` — paste a YouTube video URL and press Enter.
+It then asks `Download (a)udio, (v)ideo, or (b)oth?` — enter `a`, `v`, or `b`. The
+metadata JSON is always saved regardless of that choice.
 
 ## Notes
 
@@ -98,7 +102,8 @@ The script prompts `Input the Youtube URL` — paste a YouTube video URL and pre
   missing`. It is non-fatal — the best audio stream still downloads. Resolving it
   fully requires yt-dlp's EJS challenge-solver distribution; see the
   [EJS wiki](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
-- yt-dlp may also note that `ffmpeg` is not installed. It isn't needed here because
-  the audio is saved in its native format without conversion. Install it only if you
-  later add format conversion (e.g. to `.mp3`). See the
+- **Video** downloads require `ffmpeg` to merge the separate video and audio streams
+  into the `.mp4`. If it isn't on your PATH, video downloads fail (or fall back to a
+  lower-quality single stream). Audio-only downloads keep the native format and don't
+  need it. See the
   [yt-dlp dependencies docs](https://github.com/yt-dlp/yt-dlp#dependencies).

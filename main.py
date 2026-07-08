@@ -47,6 +47,25 @@ def download_audio_only(url : str):
     with yt_dlp.YoutubeDL(audio_opts) as ydl:
         ydl.download([url])
 
+def download_video(url : str):
+    # Save video under a Video/ folder (created if missing)
+    os.makedirs("Video", exist_ok=True)
+
+    # Video download settings. Grabs the best video + best audio and merges them
+    # with ffmpeg into a single .mp4 (full resolution; ffmpeg is required here).
+    video_opts = {
+        'format': 'bestvideo+bestaudio/best',                   # Best video+audio, falling back to best single file
+        'merge_output_format': 'mp4',                           # Merge the streams into one .mp4
+        'outtmpl': os.path.join('Video', '%(title)s.%(ext)s'),  # Save under Video/ with the video title
+        'noplaylist': True,                                     # A watch?v=...&list=... URL is just the video
+        'js_runtimes': JS_RUNTIMES,
+        'quiet': False,                                         # Keep False to see download logs in stdout
+    }
+
+    # Fresh extraction for the same 403 reason as the audio download above.
+    with yt_dlp.YoutubeDL(video_opts) as ydl:
+        ydl.download([url])
+
 
 #1. initiate variables
 URL = ''
@@ -59,7 +78,8 @@ ydl_opts = {
     'noplaylist': True,              # For a watch?v=...&list=... URL, take only the video
     #'sleep_interval_requests': 1,    # 1s between API requests; reduces "Incomplete data received" retries on high-comment videos
     'extractor_args': {'youtube': {'comment_sort': ['top'],      # Sort by top comments (default is newest)
-                                   'max_comments': ['1000']}},   # Cap at the top 1000 comments
+                                   #'max_comments': ['1000'] # Cap at the top 1000 comments
+                                   }},   
     'js_runtimes': JS_RUNTIMES,    # Use Node to sign YouTube URLs (avoids unavailable/403 errors); shared by both configs
     'quiet': False,                   # Keep the console output clean
 }
@@ -88,6 +108,15 @@ except Exception as e:
 #3. Download Metadata
 download_metadata_only(m_data)
 
-#4. Download the audio (re-extracts fresh from the URL to get a downloadable format)
-download_audio_only(URL)
+#4. Ask what media to download, then fetch it (each does a fresh extraction)
+choice = input('Download (a)udio, (v)ideo, or (b)oth? ').strip().lower()
+want_audio = choice in ('a', 'audio', 'b', 'both')
+want_video = choice in ('v', 'video', 'b', 'both')
+
+if want_audio:
+    download_audio_only(URL)
+if want_video:
+    download_video(URL)
+if not (want_audio or want_video):
+    print('No media selected; saved metadata only.')
 
