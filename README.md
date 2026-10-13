@@ -15,11 +15,18 @@ Extraction and downloads are powered by [yt-dlp](https://github.com/yt-dlp/yt-dl
 
 ## What it does
 
-`main.py` prompts for a single YouTube video URL when run, then processes it in three
-steps:
+`main.py` asks two questions up front (the video URL, then audio/video/both) and hands
+both to `capture()` in `capture.py`, which runs the rest without further input:
 
-**1. Extract once** — a single yt-dlp call (`ydl_opts`) pulls the full metadata,
-including the comments list, without downloading the media:
+| Module | Owns |
+|---|---|
+| `capture.py` | One video end to end (`capture(url, choice, ...)`) and the yt-dlp option sets |
+| `transcript.py` | Choosing and parsing English captions (`get_transcript`, `to_txt`) |
+| `video_folder.py` | The video's folder: names, `data.json` / `transcript.txt`, overwrite rules |
+| `helpers.py` | Comment sorting, reading the audio/video answer, spotting playlists |
+
+**1. Extract once** — a single yt-dlp call (`METADATA_OPTS` in `capture.py`) pulls the
+full metadata, including the comments list, without downloading the media:
 
 - `getcomments: True` — fetch the comments list
 - `skip_download: True` — read metadata only, don't download the video
@@ -37,8 +44,8 @@ detects it up front (before any heavy extraction) and exits with a message rathe
 bulk-processing every video. A `watch?v=…&list=…` link is treated as just the single
 video.
 
-**2. Save metadata and transcript** (`save_metadata_and_transcript`) — writes the sanitized,
-JSON-serializable info to `data.json` in the video's folder. Before
+**2. Save metadata and transcript** — writes the sanitized, JSON-serializable info to
+`data.json` in the video's folder (`video_folder.py`). Before
 saving, the fetched comments are re-ordered **most-liked first** (by `like_count`).
 
 The English transcript (built by `transcript.py`) is saved two ways:
@@ -60,18 +67,20 @@ Which captions count as English:
 - Machine-translated English is never used. If nothing qualifies, `transcript` is
   `null`, no `.txt` is written, and the console says so.
 - If a creator track has no `.srt` download, the auto-captions are tried next.
-- If the caption download itself fails (network error), the metadata is still saved,
-  with `transcript: null` and a console message.
+- Caption problems never stop a run: if the caption download fails, the file is empty,
+  or nothing qualifies, the metadata is still saved with `transcript: null`, and the
+  summary says why. A partly broken caption file (e.g. a blank caption) keeps its
+  readable parts.
 
-**3. Download media** — prompts `Download (a)udio, (v)ideo, or (b)oth?` and runs the
-matching download(s). Each does its own fresh re-extraction of the URL:
+**3. Download media** — runs the download(s) you chose at the start. Each does its own
+fresh re-extraction of the URL:
 
-- **Audio** (`download_audio_only`) — `format: 'bestaudio[ext=m4a]/bestaudio'`: YouTube's
+- **Audio** (`AUDIO_OPTS`) — `format: 'bestaudio[ext=m4a]/bestaudio'`: YouTube's
   `.m4a` (AAC) stream, which music players handle almost everywhere, falling back to the
   best other audio-only stream (usually `.webm`/Opus) when there's no `.m4a`. No
   re-encoding. ffmpeg embeds **tags** (title, artist, date) and the video thumbnail as
   **cover art**, so players show proper names. Saved as `<title> [<id>].m4a`.
-- **Video** (`download_video`) — `format: 'bestvideo+bestaudio/best'`, merged by
+- **Video** (`VIDEO_OPTS`) — `format: 'bestvideo+bestaudio/best'`, merged by
   ffmpeg into a single full-resolution `<title> [<id>].mp4`. **Requires ffmpeg.**
 
 Each step re-extracts fresh instead of reusing step 1's data: those metadata format
@@ -126,14 +135,17 @@ On CMD, activate with `.venv\Scripts\activate` instead.
 python main.py
 ```
 
-The script prompts `Input the Youtube URL` — paste a YouTube video URL and press Enter.
-It then asks `Download (a)udio, (v)ideo, or (b)oth?` — enter `a`, `v`, or `b`. The
-metadata JSON and transcript are always saved regardless of that choice.
+The script asks `Input the Youtube URL` — paste a YouTube video URL and press Enter —
+then `Download (a)udio, (v)ideo, or (b)oth?` — enter `a`, `v`, or `b` (anything else
+downloads no media). After that it runs unattended and ends with a short summary: the
+folder, the transcript status, and what was written or downloaded. The metadata JSON
+and transcript are always saved regardless of the audio/video choice.
 
 ## Tests
 
-The transcript logic (track choice, `.srt` parsing, line joining, timestamps) has unit
-tests using Python's built-in `unittest`:
+Each module is tested through its interface with Python's built-in `unittest`, offline:
+`capture()` against a fake yt-dlp and a temp folder, `video_folder.py` in a temp folder,
+and `transcript.py` with a stand-in caption download:
 
 ```powershell
 python -m unittest -v
@@ -148,7 +160,7 @@ python -m unittest -v
   Giving up after 3 retries` warnings. These are **non-fatal** — YouTube occasionally
   returns an incomplete comment page, so yt-dlp skips that page and continues (you may
   end up with slightly fewer comments than the true total). Uncommenting
-  `sleep_interval_requests` in `ydl_opts` (1s between requests) reduces how often this
+  `sleep_interval_requests` in `METADATA_OPTS` in `capture.py` (1s between requests) reduces how often this
   happens, at the cost of a slower run.
 - Audio/video downloads can still fail with `HTTP Error 403: Forbidden` — YouTube
   refuses some download requests (about half in testing on yt-dlp 2026.08.19; every

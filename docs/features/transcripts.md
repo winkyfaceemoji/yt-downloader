@@ -1,13 +1,25 @@
 # English transcripts
 
 Every run saves the video's English transcript (when one qualifies) alongside the
-metadata. Pure logic lives in `transcript.py` (unit-tested in `test_transcript.py`);
-`main.py`'s `save_metadata_and_transcript` fetches it and writes the files.
+metadata. `transcript.py` owns it, behind a two-function interface; it's tested only
+through that interface in `test_transcript.py`.
 
-## Which captions are used — `pick_track`
+```python
+get_transcript(info, fetch) -> (transcript | None, note)
+to_txt(transcript, duration) -> str
+```
 
-yt-dlp lists creator-uploaded tracks in `info['subtitles']` and YouTube's
-auto-captions in `info['automatic_captions']`. Candidates, in order:
+- `info` is yt-dlp's info dict. `fetch(url) -> str` downloads a caption file: `capture.py`
+  passes yt-dlp's `urlopen`, and tests pass a stand-in. That's the module's seam.
+- **Caption problems never raise.** A missing, failed or empty caption file returns
+  `(None, note)`, so a run always keeps its metadata. The note says why, e.g.
+  `no English captions`, `caption download failed (…)`, `caption file was empty`, or
+  `86 caption pieces from auto captions`.
+
+## Which captions are used
+
+yt-dlp lists creator-uploaded tracks in `info['subtitles']` and YouTube's auto-captions
+in `info['automatic_captions']`. Candidates, in order:
 
 1. Creator-uploaded English: keys matching `en` or `en-XX` (uppercase region, e.g.
    `en-US`); plain `en` sorts first. `source = "manual"`.
@@ -27,12 +39,11 @@ The first candidate that offers an `.srt` download wins. Never used: auto `en` w
 }
 ```
 
-- `segments` are the original `.srt` cues, times in seconds (millisecond precision).
-- `null` when no English track qualifies (console: "No English captions found") or when
-  the caption download fails with a yt-dlp `RequestError` (console says so); the rest of
-  the metadata is still saved.
+- `segments` are the original `.srt` cues, with times in seconds (millisecond precision).
+- `null` when nothing qualifies, when the caption download fails, or when the file has
+  no cues.
 
-## Readable `.txt` — `to_txt` → `to_lines` + `format_txt`
+## Readable `.txt` (`to_txt`)
 
 ```
 [00:17] All my life I been this way.
@@ -50,13 +61,16 @@ The first candidate that offers an `.srt` download wins. Never used: auto `en` w
 
 ## Gotchas
 
+- **The `.srt` parser is deliberately tolerant.** A cue is any block with a
+  `start --> end` line; blocks without one, or with a garbled time, are skipped. A blank
+  caption in YouTube's `.srt` leaves exactly such a block (blank line, blank line, then
+  the next cue number). A strict parser crashed there and lost the run's metadata, so
+  don't "simplify" this back.
 - **Auto-caption cues overlap.** During continuous speech each cue's end runs past the
-  next cue's start (rolling captions), so "next start − previous end" is negative. A
+  next cue's start (rolling captions), so "next start − previous end" is negative, and a
   positive gap only appears at a real pause. That's why the pause rule uses the latest
   end seen rather than cue-to-cue start spacing (~2 s, which would break every line).
 - **Unpunctuated, pause-free speech never breaks**, so such a transcript can produce
   very long lines.
 - **Caption URLs in a saved JSON expire.** To backfill an old video, re-extract it for
   fresh `subtitles` / `automatic_captions`.
-- On re-run, if the new run has no transcript, an existing `transcript.txt` is deleted
-  so the folder matches `data.json`.

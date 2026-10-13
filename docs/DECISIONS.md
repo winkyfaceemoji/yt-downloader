@@ -4,6 +4,23 @@ Append-only log of the "why" that lives in no other file: rejected alternatives,
 reverted experiments, and cross-cutting choices. Newest first. Read this before
 editing; don't undo an entry without raising it first.
 
+## 2026-10-13 — Capture one video through a single `capture()` call
+- `main.py` ran its whole flow on import (`input()` plus network), so none of it could be tested. A data-loss bug hid in the untested calling code, and folder naming relied on two separate yt-dlp configs happening to agree.
+- Now `main.py` only asks the two questions. `capture.py` runs the video behind one call, with yt-dlp (`ydl_factory`) and the output folder (`downloads_dir`) passed in; tests use a fake and a temp dir. `video_folder.py` owns names and paths from one naming config, `transcript.py` shrank to `get_transcript` / `to_txt`, and `helpers.py` holds the small pure pieces.
+- Rejected: keeping the flow in `main.py` and only pulling out pure helpers (the bugs stay in the untested callers), and a separate port for the filesystem (a temp dir already stands in for it).
+- Validated with a throwaway prototype, deleted afterwards at the user's choice.
+- Files: `main.py`, `capture.py`, `video_folder.py`, `transcript.py`, `helpers.py`, `test_*.py`.
+
+## 2026-10-13 — Ask the audio/video question before the metadata fetch
+- Both questions come first, so the slow metadata and comment fetch runs unattended.
+- Rejected: asking after the fetch, as before. That would need a callback into `capture()` just to prompt mid-run.
+- Files: `main.py`, `capture.py`.
+
+## 2026-10-13 — Reverted: strict `.srt` parsing
+- A review removed `parse_srt`'s malformed-block guard as "handling for an impossible case". It isn't impossible: a blank caption cue leaves a block with no timing line, and an empty file has no blocks. The `IndexError`/`ValueError` escaped the caption-error handling, so `data.json` was never written.
+- The parser is tolerant again: blocks without a timing line are skipped, and `get_transcript` never raises for caption problems.
+- Files: `transcript.py`.
+
 ## 2026-10-13 — Pin yt-dlp 2026.08.19 to cut media-download 403s
 - On 2026.07.04, audio/video downloads failed with `HTTP 403` 9/9 times; on 2026.08.19 about half succeed. Failing and passing runs used the same client, format and server, so the refusal is YouTube-side and per-request.
 - Rejected: a retry loop on 403 and a PO-token provider plugin, to keep the tool simple. Re-running usually works.

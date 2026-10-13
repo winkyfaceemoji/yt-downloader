@@ -1,9 +1,26 @@
+"""English transcripts for one video.
+
+The whole interface:
+    get_transcript(info, fetch) -> (transcript | None, note)
+    to_txt(transcript, duration) -> str
+
+`info` is yt-dlp's info dict; `fetch(url) -> str` downloads a caption file (yt-dlp's
+urlopen in production, a stand-in in tests). Caption problems never raise: a missing,
+failed or empty caption file gives (None, note), where the note says why.
+`transcript` is {'source': 'manual' | 'auto', 'segments': [{'start', 'end', 'text'}]}.
+"""
 import re
 from typing import NamedTuple
+
+__all__ = ['get_transcript', 'to_txt']
 
 # Creator-uploaded English: 'en' or a regional variant like 'en-US'. Lowercase suffixes
 # ('en-ja') are machine translations of another language's subtitles, so they're excluded.
 MANUAL_ENGLISH = re.compile(r'en(-[A-Z]{2})?')
+SENTENCE_END = ('.', '!', '?', '…')
+# Words ending in '.' that don't end a sentence
+ABBREVIATIONS = {'mr.', 'mrs.', 'ms.', 'dr.', 'st.', 'jr.', 'sr.', 'vs.', 'e.g.', 'i.e.'}
+PAUSE_SECONDS = 1.5
 
 
 class Track(NamedTuple):
@@ -16,66 +33,64 @@ class Line(NamedTuple):
     text: str
 
 
-def pick_track(subtitles, automatic_captions):
-    """Return the Track for the English captions to use, or None.
+def get_transcript(info, fetch):
+    """Fetch the English transcript for an extracted video: (transcript | None, note)."""
+    track = _pick_track(info.get('subtitles') or {}, info.get('automatic_captions') or {})
+    if not track:
+        return None, 'no English captions'
+    try:
+        srt = fetch(track.url)
+    except Exception as e:  # any download failure: the run must still save its metadata
+        return None, f'caption download failed ({e})'
+    segments = _parse_srt(srt)
+    if not segments:
+        return None, 'caption file was empty'
+    return {'source': track.source, 'segments': segments}, f'{len(segments)} caption pieces from {track.source} captions'
 
-    Creator-uploaded English wins. Otherwise use auto-captions only when the speech
-    itself is English ('en-orig'); auto 'en' without it is machine-translated.
-    A candidate without an .srt download is skipped in favour of the next one.
-    """
+
+def to_txt(transcript, duration):
+    """Render a transcript as readable timestamped lines, one per sentence or pause."""
+    return _format_txt(_to_lines(transcript['segments']), duration)
+
+
+def _pick_track(subtitles, automatic_captions):
+    # Creator-uploaded English wins. Otherwise auto-captions only when the speech itself
+    # is English ('en-orig'); auto 'en' without it is machine-translated. A candidate
+    # without an .srt download is skipped in favour of the next one.
     # sorted() puts plain 'en' ahead of regional variants
     candidates = [('manual', subtitles[lang]) for lang in sorted(subtitles) if MANUAL_ENGLISH.fullmatch(lang)]
     if 'en-orig' in automatic_captions:
         candidates.append(('auto', automatic_captions['en-orig']))
     for source, formats in candidates:
-        url = _srt_url(formats)
+        url = next((f['url'] for f in formats if f.get('ext') == 'srt'), None)
         if url:
             return Track(source, url)
     return None
 
 
-def get_transcript(ydl, info):
-    """Fetch the English transcript for an extracted video: {'source', 'segments'} or None."""
-    track = pick_track(info.get('subtitles') or {}, info.get('automatic_captions') or {})
-    if not track:
-        return None
-    srt = ydl.urlopen(track.url).read().decode('utf-8')
-    return {'source': track.source, 'segments': parse_srt(srt)}
-
-
-def to_txt(transcript, duration):
-    """Render a transcript from get_transcript() as the readable timestamped .txt."""
-    return format_txt(to_lines(transcript['segments']), duration)
-
-
-def _srt_url(formats):
-    return next((f['url'] for f in formats if f.get('ext') == 'srt'), None)
-
-
-def parse_srt(text):
-    """Turn .srt text into [{'start', 'end', 'text'}] with times in seconds."""
+def _parse_srt(text):
+    # A cue is any block with a 'start --> end' line; the text follows it. Blocks without
+    # one, or with a garbled time, are skipped: a blank cue in YouTube's .srt leaves such
+    # a block behind, and it must not lose the rest of the transcript.
     segments = []
     for block in text.replace('\r\n', '\n').strip().split('\n\n'):
-        lines = block.split('\n')
-        start, end = lines[1].split(' --> ')
-        segments.append({'start': _seconds(start), 'end': _seconds(end), 'text': ' '.join(lines[2:])})
+        lines = block.strip('\n').split('\n')
+        timing = next((i for i, line in enumerate(lines) if ' --> ' in line), None)
+        if timing is None:
+            continue
+        try:
+            start, end = (_seconds(t) for t in lines[timing].split(' --> '))
+        except ValueError:
+            continue
+        segments.append({'start': start, 'end': end, 'text': ' '.join(lines[timing + 1:]).strip()})
     return segments
 
 
-SENTENCE_END = ('.', '!', '?', '…')
-# Words ending in '.' that don't end a sentence
-ABBREVIATIONS = {'mr.', 'mrs.', 'ms.', 'dr.', 'st.', 'jr.', 'sr.', 'vs.', 'e.g.', 'i.e.'}
-PAUSE_SECONDS = 1.5
-
-
-def to_lines(segments):
-    """Join caption pieces into readable lines: [Line(start_seconds, text)].
-
-    A line ends after a word with sentence-ending punctuation (even mid-piece), or
-    before a piece that starts more than PAUSE_SECONDS after the previous speech ended.
-    Auto-caption pieces overlap while speech is continuous, so a positive gap only
-    shows up at a real pause. A line split mid-piece starts at that piece's start time.
-    """
+def _to_lines(segments):
+    # A line ends after a word with sentence-ending punctuation (even mid-piece), or
+    # before a piece that starts more than PAUSE_SECONDS after the previous speech ended.
+    # Auto-caption pieces overlap while speech is continuous, so a positive gap only
+    # shows up at a real pause. A line split mid-piece starts at that piece's start time.
     lines, words, start, last_end = [], [], None, None
     for s in segments:
         if words and s['start'] - last_end > PAUSE_SECONDS:
@@ -98,11 +113,9 @@ def _ends_sentence(word):
     return word.rstrip('"\')]').endswith(SENTENCE_END) and word.lower() not in ABBREVIATIONS
 
 
-def format_txt(lines, duration):
-    """Render lines as '[mm:ss] text', or '[h:mm:ss] text' once the video reaches an hour.
-
-    The video's duration decides, falling back to the last line's time when it's missing.
-    """
+def _format_txt(lines, duration):
+    # '[mm:ss] text', or '[h:mm:ss] text' once the video reaches an hour; the video's
+    # duration decides, falling back to the last line's time when it's missing.
     last_start = lines[-1].start if lines else 0
     show_hours = max(duration or 0, last_start) >= 3600
     out = []
