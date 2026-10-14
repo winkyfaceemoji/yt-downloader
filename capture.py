@@ -1,23 +1,28 @@
 """Capture one video: one module, one call.
 
-    capture(url, choice, *, ydl_factory=yt_dlp.YoutubeDL, downloads_dir, naming_opts=None)
+    capture(url, choice, *, as_music=False, ydl_factory=yt_dlp.YoutubeDL, downloads_dir,
+            naming_opts=None, http_get=music.http_get, cookies_file=None)
         -> Outcome(status, folder, transcript_note, actions)
 
 Runs one video end to end: peek at the URL (rejecting playlists), fetch metadata and
 comments, fetch the English transcript, save data.json/transcript.txt, then download the
 chosen audio/video. `choice` is the user's 'a'/'v'/'b' answer, taken up front so the
-slow part needs no input. Extraction and download errors from yt-dlp propagate; caption
+slow part needs no input. With `as_music` and an audio download, the song is looked up on
+MusicBrainz (saved as data.json's "musicbrainz") and a confident match is tagged into the
+audio. `cookies_file`, when given, is passed to every yt-dlp call. Extraction and download errors from yt-dlp propagate; caption
 problems never do (see transcript.py).
 
-Two seams, each with two adapters:
+Seams, each with two adapters:
   - ydl_factory(opts): the real yt_dlp.YoutubeDL in production, a fake in tests.
   - downloads_dir: the project's Downloads/ in production, a temp dir in tests.
+  - http_get(url) -> bytes: music.http_get (MusicBrainz) in production, a fake in tests.
 """
 from dataclasses import dataclass, field
 
 import yt_dlp
 
 import helpers
+import music
 import transcript
 from video_folder import VideoFolder
 
@@ -61,10 +66,12 @@ class Outcome:
     actions: list = field(default_factory=list)
 
 
-def capture(url, choice, *, ydl_factory=yt_dlp.YoutubeDL, downloads_dir, naming_opts=None):
+def capture(url, choice, *, as_music=False, ydl_factory=yt_dlp.YoutubeDL, downloads_dir,
+            naming_opts=None, http_get=music.http_get, cookies_file=None):
     want_audio, want_video = helpers.parse_choice(choice)
+    cookies = {'cookiefile': cookies_file} if cookies_file else {}
 
-    with ydl_factory(METADATA_OPTS) as ydl:
+    with ydl_factory({**METADATA_OPTS, **cookies}) as ydl:
         result = ydl.extract_info(url, download=False, process=False)
         if helpers.is_playlist(result):
             return Outcome('rejected: that URL is a playlist')
@@ -75,17 +82,31 @@ def capture(url, choice, *, ydl_factory=yt_dlp.YoutubeDL, downloads_dir, naming_
     video_data['comments'] = helpers.sort_comments(video_data.get('comments'))
     video_data['transcript'] = video_transcript
 
+    # Music lookup only when it can be used: the user said "music" and wants the audio
+    match, music_note = None, None
+    if as_music and want_audio:
+        match, music_note = music.lookup(info, http_get)
+        video_data['musicbrainz'] = match
+
     folder = VideoFolder(downloads_dir, naming_opts)
     text = transcript.to_txt(video_transcript, info.get('duration')) if video_transcript else None
     path, actions = folder.save(info, video_data, text)
+    if music_note:
+        actions.append(f'MusicBrainz: {music_note}')
 
-    # Media re-extract fresh (docs/DECISIONS.md: reusing `info` gets HTTP 403)
-    for wanted, extra, label in ((want_audio, AUDIO_OPTS, 'audio'), (want_video, VIDEO_OPTS, 'video')):
-        if wanted:
-            opts = {**folder.media_opts(), 'noplaylist': True, 'js_runtimes': JS_RUNTIMES, 'quiet': False, **extra}
-            with ydl_factory(opts) as ydl:
-                ydl.download([url])
-            actions.append(f'downloaded {label}')
+    # Media re-extract fresh (ADR 0003: reusing `info` gets HTTP 403)
+    media_opts = {**folder.media_opts(), 'noplaylist': True, 'js_runtimes': JS_RUNTIMES, 'quiet': False, **cookies}
+    if want_audio:
+        with ydl_factory({**media_opts, **AUDIO_OPTS}) as ydl:
+            downloaded = ydl.extract_info(url, download=True)
+        actions.append('downloaded audio')
+        if match:
+            audio_path = downloaded['requested_downloads'][0]['filepath']
+            actions.append(music.tag_audio(audio_path, match, http_get))
+    if want_video:
+        with ydl_factory({**media_opts, **VIDEO_OPTS}) as ydl:
+            ydl.download([url])
+        actions.append('downloaded video')
     if not (want_audio or want_video):
         actions.append('no media selected')
     return Outcome('saved', path, note, actions)

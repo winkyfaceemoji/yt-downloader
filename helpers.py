@@ -15,3 +15,8 @@ def parse_choice(answer):
 def is_playlist(result):
     """True for an unprocessed yt-dlp result that is a playlist rather than one video."""
     return result.get('_type') in ('playlist', 'multi_video')
+
+
+def parse_yes(answer):
+    """'y' / 'yes' in any case or spacing -> True; anything else -> False."""
+    return answer.strip().lower() in ('y', 'yes')

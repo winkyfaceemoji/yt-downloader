@@ -24,6 +24,16 @@ class ParseChoiceTests(unittest.TestCase):
             self.assertEqual(helpers.parse_choice(answer), (False, False), answer)
 
 
+class ParseYesTests(unittest.TestCase):
+    def test_y_or_yes_in_any_case_means_yes(self):
+        for answer in ('y', 'Y', ' yes ', 'YES'):
+            self.assertTrue(helpers.parse_yes(answer), answer)
+
+    def test_anything_else_means_no(self):
+        for answer in ('', 'n', 'no', 'maybe'):
+            self.assertFalse(helpers.parse_yes(answer), answer)
+
+
 class IsPlaylistTests(unittest.TestCase):
     def test_playlists_and_multi_video_results_count(self):
         self.assertTrue(helpers.is_playlist({'_type': 'playlist'}))

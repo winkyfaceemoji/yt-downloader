@@ -27,8 +27,10 @@ class VideoFolderTests(unittest.TestCase):
     def test_saves_data_and_transcript_in_a_folder_named_after_the_video(self):
         path, actions = VideoFolder(self.root).save(INFO, {'id': INFO['id']}, '[00:01] Hello.\n')
         self.assertEqual(path, os.path.join(self.root, 'Sins Of The Father [ZVeQQHEkcAk]'))
-        self.assertEqual(json.load(open(os.path.join(path, 'data.json'))), {'id': INFO['id']})
-        self.assertEqual(open(os.path.join(path, 'transcript.txt'), encoding='utf-8').read(), '[00:01] Hello.\n')
+        with open(os.path.join(path, 'data.json')) as f:
+            self.assertEqual(json.load(f), {'id': INFO['id']})
+        with open(os.path.join(path, 'transcript.txt'), encoding='utf-8') as f:
+            self.assertEqual(f.read(), '[00:01] Hello.\n')
         self.assertEqual(actions, ['wrote data.json', 'wrote transcript.txt'])
 
     def test_a_run_without_a_transcript_removes_the_old_one(self):
