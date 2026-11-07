@@ -1,6 +1,6 @@
 # 0006. Per-video folders under Downloads/, anchored to main.py
 
-Status: Accepted (2026-10-13)
+Status: Superseded by 0019
 
 ## Context
 Output went to per-type `Data/`, `Audio/` and `Video/` folders, relative to the working directory. The data is meant to be reused in other projects.

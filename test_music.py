@@ -139,7 +139,8 @@ class TagAudioTests(unittest.TestCase):
         return [bytes(v).decode('utf-8') for v in tags[f'----:com.apple.iTunes:{name}']]
 
     def test_writes_song_album_numbers_and_musicbrainz_ids(self):
-        music.tag_audio(self.path, self.MATCH, FakeHttp())
+        tagged, _ = music.tag_audio(self.path, self.MATCH, FakeHttp())
+        self.assertTrue(tagged)
         tags = MP4(self.path).tags
         self.assertEqual((tags['\xa9nam'], tags['\xa9ART'], tags['\xa9alb'], tags['aART'], tags['\xa9day']),
                          (['Sins Of The Father'], ['Daniel Caesar & Bon Iver'], ['Son Of Spergy'], ['Daniel Caesar'], ['2025-10-24']))
@@ -156,7 +157,8 @@ class TagAudioTests(unittest.TestCase):
         self.assertIn('coverartarchive.org/release/r1/front-500', http.urls[0])
 
     def test_keeps_the_tags_when_no_album_art_is_available(self):
-        note = music.tag_audio(self.path, self.MATCH, FakeHttp(cover=OSError('404')))
+        tagged, note = music.tag_audio(self.path, self.MATCH, FakeHttp(cover=OSError('404')))
+        self.assertTrue(tagged)
         tags = MP4(self.path).tags
         self.assertEqual(tags['\xa9alb'], ['Son Of Spergy'])
         self.assertNotIn('covr', tags)
@@ -166,7 +168,8 @@ class TagAudioTests(unittest.TestCase):
         path = os.path.join(self.dir, 'song.webm')
         with open(path, 'wb') as f:
             f.write(b'not an m4a')
-        note = music.tag_audio(path, self.MATCH, FakeHttp())
+        tagged, note = music.tag_audio(path, self.MATCH, FakeHttp())
+        self.assertFalse(tagged)
         with open(path, 'rb') as f:
             self.assertEqual(f.read(), b'not an m4a')
         self.assertIn('.m4a', note)

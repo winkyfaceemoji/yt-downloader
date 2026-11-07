@@ -14,7 +14,7 @@ problems never do (see transcript.py).
 
 Seams, each with two adapters:
   - ydl_factory(opts): the real yt_dlp.YoutubeDL in production, a fake in tests.
-  - downloads_dir: the project's Downloads/ in production, a temp dir in tests.
+  - downloads_dir: Storage/Media/YouTube in production (hub.DOWNLOADS_DIR), a temp dir in tests.
   - http_get(url) -> bytes: music.http_get (MusicBrainz) in production, a fake in tests.
 """
 from dataclasses import dataclass, field
@@ -64,6 +64,9 @@ class Outcome:
     folder: str | None = None
     transcript_note: str = ''
     actions: list = field(default_factory=list)
+    transcript_found: bool = False
+    music_tagged: bool | None = None  # None: music wasn't requested (or no audio)
+    music_note: str = ''               # why, when music was requested
 
 
 def capture(url, choice, *, as_music=False, ydl_factory=yt_dlp.YoutubeDL, downloads_dir,
@@ -83,10 +86,11 @@ def capture(url, choice, *, as_music=False, ydl_factory=yt_dlp.YoutubeDL, downlo
     video_data['transcript'] = video_transcript
 
     # Music lookup only when it can be used: the user said "music" and wants the audio
-    match, music_note = None, None
+    match, music_note, music_tagged = None, None, None
     if as_music and want_audio:
         match, music_note = music.lookup(info, http_get)
         video_data['musicbrainz'] = match
+        music_tagged = False
 
     folder = VideoFolder(downloads_dir, naming_opts)
     text = transcript.to_txt(video_transcript, info.get('duration')) if video_transcript else None
@@ -102,11 +106,13 @@ def capture(url, choice, *, as_music=False, ydl_factory=yt_dlp.YoutubeDL, downlo
         actions.append('downloaded audio')
         if match:
             audio_path = downloaded['requested_downloads'][0]['filepath']
-            actions.append(music.tag_audio(audio_path, match, http_get))
+            music_tagged, music_note = music.tag_audio(audio_path, match, http_get)
+            actions.append(music_note)
     if want_video:
         with ydl_factory({**media_opts, **VIDEO_OPTS}) as ydl:
             ydl.download([url])
         actions.append('downloaded video')
     if not (want_audio or want_video):
         actions.append('no media selected')
-    return Outcome('saved', path, note, actions)
+    return Outcome('saved', path, note, actions, transcript_found=video_transcript is not None,
+                   music_tagged=music_tagged, music_note=music_note or '')

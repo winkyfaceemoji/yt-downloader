@@ -7,7 +7,7 @@ paths:
 # Music rules
 
 ## Invariants
-- The interface is `lookup(info, http_get) -> (match | None, note)` and `tag_audio(path, match, http_get) -> note`. `http_get(url) -> bytes` is the seam; tests pass a fake. Neither function raises for network, data or tagging problems: a run must never lose its download over MusicBrainz.
+- The interface is `lookup(info, http_get) -> (match | None, note)` and `tag_audio(path, match, http_get) -> (tagged, note)`. `http_get(url) -> bytes` is the seam; tests pass a fake. Neither function raises for network, data or tagging problems: a run must never lose its download over MusicBrainz.
 - **Only confident matches** (ADR 0015). The title (after `_clean`), one credited artist, and the length within `MAX_LENGTH_GAP` seconds must all match. If they don't, the result is `None`, and the audio keeps yt-dlp's tags and YouTube thumbnail.
 - **Release ranking across all confident recordings** (ADR 0015): studio album, then any other non-compilation release, then a compilation; earliest date within a tier.
 - `match` is stored as-is in `data.json`'s `musicbrainz` field. Other projects read it, so treat key changes as breaking.

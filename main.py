@@ -1,31 +1,27 @@
 import os
+import sys
+
+import hub
 from capture import capture
 from helpers import parse_choice, parse_yes
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# Output goes in Downloads/ next to this script (see capture.py / video_folder.py)
-DOWNLOADS = os.path.join(HERE, 'Downloads')
 # Optional YouTube cookies (Netscape format) for "confirm you're not a bot" blocks; git-ignored
 COOKIES = os.path.join(HERE, 'cookies.txt')
+cookies_file = COOKIES if os.path.exists(COOKIES) else None
 
-#1. Ask everything up front, so the slow metadata fetch can run unattended
+# Titles can hold characters a cp1252 console or pipe can't encode; print '?' rather than crash
+sys.stdout.reconfigure(errors='replace')
+
+#1. With arguments this is the data hub (hub.cmd) or a script: no prompts, see hub.py
+if len(sys.argv) > 1:
+    raise SystemExit(hub.main(sys.argv[1:], capture_fn=capture, cookies_file=cookies_file))
+
+#2. Otherwise ask everything up front, so the slow metadata fetch can run unattended
 url = input('Input the Youtube URL: ')
 choice = input('Download (a)udio, (v)ideo, or (b)oth? ')
 want_audio, _ = parse_choice(choice)
 as_music = want_audio and parse_yes(input('Treat as music (MusicBrainz tags + album art)? (y/n) '))
 
-#2. Capture the video: metadata + comments, transcript, then any audio/video, all in one folder
-try:
-    outcome = capture(url, choice, as_music=as_music, downloads_dir=DOWNLOADS,
-                      cookies_file=COOKIES if os.path.exists(COOKIES) else None)
-except Exception as e:
-    print(e)
-    raise SystemExit(1)
-
-#3. Report what happened
-if outcome.status != 'saved':
-    raise SystemExit(outcome.status)
-print(f'\nSaved to: {outcome.folder}')
-print(f'Transcript: {outcome.transcript_note}')
-for action in outcome.actions:
-    print(f'  - {action}')
+#3. Capture under the same run lock and log the hub uses, so its status sees this run too
+raise SystemExit(hub.run_capture(url, choice, as_music, capture_fn=capture, cookies_file=cookies_file))

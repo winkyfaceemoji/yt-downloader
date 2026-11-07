@@ -10,7 +10,7 @@ A small Python script built on [yt-dlp](https://github.com/yt-dlp/yt-dlp). For o
 Everything for a video lands in one folder:
 
 ```
-Downloads/                         ← next to main.py
+C:\Users\choua\Documents\Storage\Media\YouTube\     ← backed up by the server sync
 └── <title> [<id>]/
     ├── data.json
     ├── transcript.txt             ← when English captions exist
@@ -42,7 +42,30 @@ python main.py
 2. Answer `Download (a)udio, (v)ideo, or (b)oth?` with `a`, `v` or `b`. Anything else saves only the metadata and transcript.
 3. If you chose audio: answer `Treat as music?` with `y` to add MusicBrainz tags and album art.
 
-After that it runs unattended and ends with a summary: the folder, the transcript status, and what was written or downloaded.
+After that it runs unattended and ends with a summary: the folder, the transcript status, what was written or downloaded, and anything that needs review.
+
+### From the data hub (or any script)
+
+The data hub runs the same thing with no questions through `hub.cmd`:
+
+```
+hub.cmd run capture --url <url> --mode audio|video|both [--music]
+hub.cmd status     ← is it running, when it last ran, how that went, anything to look at
+hub.cmd log        ← where the log is: C:\Users\choua\Documents\Storage\_logs\yt-downloader.log
+```
+
+The exit code is the result:
+
+| Code | Meaning |
+|---|---|
+| 0 | everything saved |
+| 1 | failed |
+| 3 | finished, but something needs review (no transcript, or music asked for but not tagged) |
+| 4 | another run is in progress |
+| 64 | bad arguments (e.g. `--music` with `--mode video`) |
+| 130 | stopped with Ctrl+C |
+
+Runs from `python main.py` share the same log and status, so only one run happens at a time.
 
 Tests (offline, no YouTube needed): `python -m unittest -v`
 
@@ -53,7 +76,8 @@ Tests (offline, no YouTube needed): `python -m unittest -v`
 - **A song got no album tags**: the MusicBrainz match wasn't confident (e.g. the title isn't "Artist - Song"). That's on purpose, so you never get a wrong album.
 - **`Incomplete data received … Giving up after 3 retries`**: harmless. YouTube sent an incomplete page of comments, so you may get slightly fewer than 1000.
 - **`n challenge solving failed: Some formats may be missing`**: harmless; the audio still downloads.
-- **A very long title fails to save**: Windows limits paths to 260 characters, and the title appears in both the folder and file names. Titles over about 85 characters can hit it.
+- **A very long title fails to save**: Windows limits paths to 260 characters, and the title appears in both the folder and file names. Titles over about 88 characters can hit it.
+- **"Another yt-downloader run is in progress"** when nothing is running: the last run's process was killed while it held its lock, and a new process happens to have reused its ID. Delete `Storage\_logs\yt-downloader.lock`.
 - **Audio/video fails after downloading**: ffmpeg isn't on your PATH.
 
 Design decisions are recorded in [docs/adr/](docs/adr/).

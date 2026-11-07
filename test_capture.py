@@ -75,14 +75,14 @@ class FakeYoutubeDL:
 
 class FakeHttp:
     # Stands in for music.http_get: MusicBrainz JSON or cover bytes; records URLs
-    def __init__(self):
-        self.urls = []
+    def __init__(self, recordings=(MB_RECORDING,)):
+        self.urls, self.recordings = [], list(recordings)
 
     def __call__(self, url):
         self.urls.append(url)
         if 'coverartarchive.org' in url:
             return b'\xff\xd8\xff\xe0 album cover \xff\xd9'
-        return json.dumps({'recordings': [MB_RECORDING]}).encode('utf-8')
+        return json.dumps({'recordings': self.recordings}).encode('utf-8')
 
 
 class CaptureTests(unittest.TestCase):
@@ -129,6 +129,10 @@ class CaptureTests(unittest.TestCase):
         self.assertTrue(outcome.status.startswith('rejected'))
         self.assertEqual((self.steps(), os.listdir(self.root)), (['peek'], []))
 
+    def test_reports_whether_a_transcript_was_found(self):
+        self.assertTrue(self.capture('n').transcript_found)
+        self.assertFalse(self.capture('n', captions_fail=True).transcript_found)
+
     def test_a_failed_caption_download_still_saves_the_metadata(self):
         outcome = self.capture('n', captions_fail=True)
         self.assertIsNone(self.data(outcome)['transcript'])
@@ -140,9 +144,16 @@ class CaptureTests(unittest.TestCase):
         self.assertIn('no media selected', outcome.actions)
 
     def test_without_music_nothing_is_looked_up(self):
-        data = self.data(self.capture('a'))
-        self.assertNotIn('musicbrainz', data)
+        outcome = self.capture('a')
+        self.assertNotIn('musicbrainz', self.data(outcome))
         self.assertEqual(self.http.urls, [])
+        self.assertIsNone(outcome.music_tagged)
+
+    def test_music_without_a_confident_match_is_reported_untagged(self):
+        self.http = FakeHttp(recordings=[])
+        outcome = self.capture('a', as_music=True)
+        self.assertIs(outcome.music_tagged, False)
+        self.assertIn('no confident MusicBrainz match', outcome.music_note)
 
     def test_music_without_audio_is_not_looked_up(self):
         data = self.data(self.capture('v', as_music=True))
@@ -179,6 +190,7 @@ class MusicCaptureTests(CaptureTests.__base__):
         tags = MP4(os.path.join(outcome.folder, 'Sins Of The Father [SONG001].m4a')).tags
         self.assertEqual((tags['\xa9alb'], tags['trkn']), (['Son Of Spergy'], [(12, 12)]))
         self.assertTrue(any('Son Of Spergy' in a for a in outcome.actions))
+        self.assertIs(outcome.music_tagged, True)
 
 
 if __name__ == '__main__':

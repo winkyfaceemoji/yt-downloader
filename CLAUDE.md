@@ -1,6 +1,6 @@
 # yt-downloader
 
-Python script around yt-dlp. For one YouTube video it saves metadata, the top comments, the English transcript, and optionally the audio (.m4a) and video (.mp4) into `Downloads/<title> [<id>]/`. When asked to treat the audio as music, it tags it from MusicBrainz, with album art from the Cover Art Archive.
+Python script around yt-dlp. For one YouTube video it saves metadata, the top comments, the English transcript, and optionally the audio (.m4a) and video (.mp4) into `C:\Users\choua\Documents\Storage\Media\YouTube\<title> [<id>]\`. When asked to treat the audio as music, it tags it from MusicBrainz, with album art from the Cover Art Archive. Adam's data hub launches it through `hub.cmd`. Domain terms are in `CONTEXT.md`.
 
 ## Commands
 Windows. Use the project venv's Python: the system Python has its own, older yt-dlp.
@@ -8,14 +8,20 @@ Windows. Use the project venv's Python: the system Python has its own, older yt-
 ```powershell
 python -m venv .venv; .\.venv\Scripts\Activate.ps1; pip install -r requirements.txt   # setup
 python main.py                 # asks: URL, (a)udio/(v)ideo/(b)oth, and (if audio) treat as music; needs the network
-python -m unittest -v          # offline tests (fake yt-dlp + temp folders)
+hub.cmd run capture --url <url> --mode audio|video|both [--music]   # same run, no prompts (data hub)
+hub.cmd status                 # JSON: busy, last_run, last_result, attention, log
+hub.cmd log                    # path of Storage\_logs\yt-downloader.log
+python -m unittest -v          # offline tests (fakes + temp folders)
 ```
+
+`hub.cmd` exit codes, shared with Adam's other tools (ADR 0020): 0 ok, 1 failed, 3 needs review, 4 busy, 64 bad arguments, 130 interrupted.
 
 Outside requirements.txt: **Node.js** (yt-dlp's JS runtime, for YouTube's signature challenge) and **ffmpeg** (audio tags and cover art, video merging) must be on PATH.
 
 ## Conventions
 - Modules:
-  - `main.py` holds only the prompts.
+  - `main.py` holds only the prompts, or hands its arguments to `hub.py`.
+  - `hub.py` is the `hub.cmd` command line and run state: lock, log, last result.
   - `capture.py` runs one video end to end and holds the yt-dlp option sets.
   - `transcript.py` chooses and parses English captions.
   - `video_folder.py` owns names, paths and file writing.
@@ -25,12 +31,12 @@ Outside requirements.txt: **Node.js** (yt-dlp's JS runtime, for YouTube's signat
   Area rules in `.claude/rules/` load when you touch these files.
 - Test each module only through its interface, with no network. yt-dlp comes in through `capture(..., ydl_factory=...)`, HTTP through `http_get`, and output through `downloads_dir`, so tests use fakes and temp folders. Write the failing test first.
 - Python 3.12+ syntax (nested quotes in f-strings). `requirements.txt` pins yt-dlp and mutagen; upgrade them on purpose (ADR 0009, 0018), and vet any new dependency against its upstream docs first.
-- `Downloads/` is user data and git-ignored. Don't write test output into it; for real end-to-end runs, copy the modules to a short temp path. `cookies.txt` is a login secret, git-ignored, and must never be committed.
+- Captures go to `Storage\Media\YouTube`, and the run log and state to `Storage\_logs` (ADR 0019, 0020). Both are Adam's backed-up data: tests always pass their own temp folders, and real runs use a throwaway video. `cookies.txt` is a login secret, git-ignored, and must never be committed.
 - Commit messages carry no Claude/Anthropic attribution trailers.
 
 ## Project-wide gotchas
 - **Intermittent `HTTP 403` on media downloads** comes from YouTube, varies by request, and is worse on older yt-dlp. The metadata is saved before any download, so re-running is the fix (ADR 0003, 0009).
-- **Windows path limit**: the title appears in both the folder and media names, so very long titles (over ~85 characters here) can fail to save, and deep temp folders fail sooner.
+- **Windows path limit**: the title appears in both the folder and media names, so very long titles (over ~88 characters under `Storage\Media\YouTube`) can fail to save, and deep temp folders fail sooner.
 - **MusicBrainz** needs the repo-URL User-Agent and at most 1 request/second (`music.http_get`). Don't loop lookups without that pacing.
 - **Console encoding**: sanitised titles contain full-width characters (`：`, `？`, `⧸`), so printing them to a cp1252 pipe raises `UnicodeEncodeError`.
 
@@ -40,7 +46,6 @@ Outside requirements.txt: **Node.js** (yt-dlp's JS runtime, for YouTube's signat
 - [0003. Reverted: reusing the metadata extraction for media downloads](docs/adr/0003-reverted-reusing-metadata-for-media-downloads.md)
 - [0004. Transcripts use only original English captions](docs/adr/0004-original-english-captions-only.md)
 - [0005. Transcript stored as JSON segments plus a sentence-per-line .txt](docs/adr/0005-transcript-json-segments-plus-txt.md)
-- [0006. Per-video folders under Downloads/, anchored to main.py](docs/adr/0006-per-video-folders-under-downloads.md)
 - [0007. Fixed data file names, titled media file names](docs/adr/0007-fixed-data-names-titled-media.md)
 - [0008. Audio is native .m4a with embedded tags and cover art](docs/adr/0008-native-m4a-audio-with-tags.md)
 - [0009. Pin yt-dlp 2026.08.19 to cut media-download 403s](docs/adr/0009-pin-yt-dlp-2026-08-19.md)
@@ -53,3 +58,5 @@ Outside requirements.txt: **Node.js** (yt-dlp's JS runtime, for YouTube's signat
 - [0016. Identify the project to MusicBrainz by its repo URL](docs/adr/0016-musicbrainz-contact-is-repo-url.md)
 - [0017. Optional cookies.txt for every yt-dlp call](docs/adr/0017-optional-cookies-file.md)
 - [0018. mutagen writes the MusicBrainz tags](docs/adr/0018-mutagen-writes-musicbrainz-tags.md)
+- [0019. Captures go to Storage\Media\YouTube](docs/adr/0019-captures-go-to-storage-media-youtube.md) (supersedes 0006)
+- [0020. hub.cmd entry point and run state in Storage\_logs](docs/adr/0020-hub-cmd-and-run-state.md)

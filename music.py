@@ -2,7 +2,7 @@
 
 The whole interface:
     lookup(info, http_get) -> (match | None, note)
-    tag_audio(path, match, http_get) -> note
+    tag_audio(path, match, http_get) -> (tagged, note)
     http_get(url) -> bytes      # production adapter: MusicBrainz User-Agent, 1 request/second
 
 `http_get` is the seam: tests pass a stand-in. Neither function raises for network or
@@ -51,9 +51,9 @@ def lookup(info, http_get):
 
 
 def tag_audio(path, match, http_get):
-    """Write the match into an .m4a's tags, with album art when available. Returns a note."""
+    """Write the match into an .m4a's tags, with album art when available: (tagged, note)."""
     if not path.lower().endswith('.m4a'):
-        return f'MusicBrainz tags need an .m4a file; left {os.path.basename(path)} as is'
+        return False, f'MusicBrainz tags need an .m4a file; left {os.path.basename(path)} as is'
     try:
         audio = MP4(path)
         if audio.tags is None:
@@ -62,8 +62,8 @@ def tag_audio(path, match, http_get):
         cover_note = _write_cover(audio.tags, match, http_get)
         audio.save()
     except Exception as e:  # a tagging problem must not cost the download
-        return f"couldn't tag the audio ({e})"
-    return 'tagged with MusicBrainz data' + cover_note
+        return False, f"couldn't tag the audio ({e})"
+    return True, 'tagged with MusicBrainz data' + cover_note
 
 
 def http_get(url):

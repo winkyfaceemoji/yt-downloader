@@ -1,6 +1,6 @@
 """The video folder has one owner.
 
-Everything about Downloads/<title> [<id>]/ lives here: the name templates, the fixed
+Everything about <downloads_dir>/<title> [<id>]/ lives here: the name templates, the fixed
 data file names, overwrite rules and stale-file cleanup. The folder name and the media
 file names come from ONE naming config, so they can't drift apart.
 
