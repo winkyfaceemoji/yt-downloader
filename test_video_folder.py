@@ -50,6 +50,23 @@ class VideoFolderTests(unittest.TestCase):
             folder = VideoFolder(self.root, naming)
             self.assertEqual(os.path.dirname(self.media_path(folder, info, 'm4a')), folder.path(info), naming)
 
+    def test_a_renamed_video_moves_its_old_folder_to_the_new_title(self):
+        folder = VideoFolder(self.root)
+        old, _ = folder.save(INFO, {}, None)
+        open(os.path.join(old, 'Sins Of The Father [ZVeQQHEkcAk].m4a'), 'w').close()
+        new, actions = folder.save({**INFO, 'title': 'Sins of the Father (Remastered)'}, {}, None)
+        self.assertEqual(os.listdir(self.root), ['Sins of the Father (Remastered) [ZVeQQHEkcAk]'])
+        self.assertTrue(os.path.exists(os.path.join(new, 'Sins Of The Father [ZVeQQHEkcAk].m4a')))
+        self.assertEqual(actions[0], 'renamed folder from "Sins Of The Father [ZVeQQHEkcAk]"')
+
+    def test_a_renamed_video_with_two_folders_already_leaves_both(self):
+        folder = VideoFolder(self.root)
+        folder.save(INFO, {}, None)
+        os.makedirs(os.path.join(self.root, 'Older Title [ZVeQQHEkcAk]'))
+        folder.save({**INFO, 'title': 'New Title'}, {}, None)
+        self.assertEqual(sorted(os.listdir(self.root)), ['New Title [ZVeQQHEkcAk]', 'Older Title [ZVeQQHEkcAk]',
+                                                          'Sins Of The Father [ZVeQQHEkcAk]'])
+
     def test_media_downloads_overwrite_on_a_re_run(self):
         self.assertTrue(VideoFolder(self.root).media_opts()['overwrites'])
 

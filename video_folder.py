@@ -9,6 +9,7 @@ Interface:
     .path(info) -> folder path
     .media_opts() -> yt-dlp options for audio/video downloads (outtmpl, overwrites, naming)
     .save(info, video_data, transcript_text) -> (folder path, [actions])
+        A video renamed since its last capture gets its old folder renamed to the new title.
 """
 import json
 import os
@@ -37,8 +38,12 @@ class VideoFolder:
 
     def save(self, info, video_data, transcript_text):
         folder = self.path(info)
-        os.makedirs(folder, exist_ok=True)
         actions = []
+        old = self._renamed_from(info, folder)
+        if old:
+            os.rename(old, folder)
+            actions.append(f'renamed folder from "{os.path.basename(old)}"')
+        os.makedirs(folder, exist_ok=True)
         with open(os.path.join(folder, 'data.json'), 'w') as f:
             json.dump(video_data, f, indent=4)
         actions.append('wrote data.json')
@@ -51,3 +56,12 @@ class VideoFolder:
             os.remove(txt)
             actions.append('removed stale transcript.txt')
         return folder, actions
+
+    def _renamed_from(self, info, folder):
+        # The video's one existing folder under an older title, if it has exactly one (ADR 0022)
+        if os.path.exists(folder) or not os.path.isdir(self.downloads_dir):
+            return None
+        found = [os.path.join(self.downloads_dir, name) for name in os.listdir(self.downloads_dir)
+                 if name.endswith(f'[{info["id"]}]')]
+        found = [path for path in found if os.path.isdir(path)]
+        return found[0] if len(found) == 1 else None
