@@ -128,6 +128,22 @@ class HubTests(unittest.TestCase):
         self.assertEqual((code, self.status()['last_result']), (0, 'ok'))
 
 
+    def test_a_run_creates_a_missing_logs_folder(self):
+        self.addCleanup(shutil.rmtree, self.logs, True)
+        self.logs = os.path.join(self.logs, 'not-yet', '_logs')
+        code, _ = self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
+        self.assertEqual((code, self.status()['last_result']), (0, 'ok'))
+
+    def test_an_unreadable_state_file_is_reported_not_a_traceback(self):
+        with open(os.path.join(self.logs, 'yt-downloader.state.json'), 'w') as f:
+            f.write('{not json')
+        status = self.status()
+        self.assertEqual((status['last_result'], status['attention']),
+                         (None, ['the state file was unreadable; the next run rewrites it']))
+        code, _ = self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
+        self.assertEqual((code, self.status()['attention']), (0, []))
+
+
     def killed_run(self):
         # A real run in another process that dies mid-capture, as if killed or lost to a reboot
         script = ('import os, hub; hub.run_capture("u", "a", False, logs_dir=os.environ["LOGS"], '

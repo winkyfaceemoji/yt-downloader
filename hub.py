@@ -146,6 +146,7 @@ class RunState:
     def acquire(self):
         # Lock byte 0 of the lock file. Windows holds it until release() or until this process
         # ends, however it ends, so "busy" never depends on a PID (ADR 0021). False when held.
+        os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
         f = open(self.lock_path, 'a+b')
         f.seek(0)  # locking() starts at the current position
         try:
@@ -195,6 +196,8 @@ class RunState:
                 return json.load(f)
         except FileNotFoundError:
             return {}
+        except ValueError:  # not JSON (a hand edit, a disk error): report it rather than crash status
+            return {'attention': ['the state file was unreadable; the next run rewrites it']}
 
     def _write_state(self, state):
         tmp = self.state_path + '.tmp'
