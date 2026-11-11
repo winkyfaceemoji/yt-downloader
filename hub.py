@@ -5,12 +5,13 @@
 
 Run state lives in logs_dir (Storage/_logs, like Adam's other tools):
     yt-downloader.log         one line per event
-    yt-downloader.lock        while a run is active: "<pid> <start time>"
+    yt-downloader.lock        byte 0 is locked by Windows while a run is active
     yt-downloader.state.json  {"last_run", "last_result", "attention"}
 """
 import argparse
 import datetime
 import json
+import msvcrt
 import os
 import sys
 
@@ -133,30 +134,30 @@ class RunState:
 
     def status(self):
         saved = self._read_state()
-        busy = self._lock_owner_alive()
+        busy = self._locked()
         result, attention = saved.get('last_result'), saved.get('attention', [])
-        if os.path.exists(self.lock_path) and not busy:  # the run's process died without finishing
+        if _unfinished(saved) and not busy:  # the run's process died without finishing
             result, attention = 'interrupted', ['the last run stopped before finishing']
         return {'tool': TOOL, 'busy': busy, 'last_run': saved.get('last_run'),
                 'last_result': result, 'attention': attention,
                 'log': self.log_path if os.path.exists(self.log_path) else None}
 
     def acquire(self):
-        # Create the lock atomically, so two runs starting together can't both get it.
-        # False when another live process holds it; a dead process's lock is cleared first.
+        # Lock byte 0 of the lock file. Windows holds it until release() or until this process
+        # ends, however it ends, so "busy" never depends on a PID (ADR 0021). False when held.
+        f = open(self.lock_path, 'a+b')
+        f.seek(0)  # locking() starts at the current position
         try:
-            fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            if self._lock_owner_alive():
-                return False
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            f.close()
+            return False
+        if f.seek(0, os.SEEK_END) == 0:
+            f.write(b'L')  # _locked() needs a byte to read
+            f.flush()
+        self._lock = f
+        if _unfinished(self._read_state()):
             self.log('INTERRUPTED the previous run stopped before finishing')
-            os.remove(self.lock_path)
-            try:
-                fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError:  # another run grabbed it in between
-                return False
-        with os.fdopen(fd, 'w') as f:
-            f.write(f'{os.getpid()} {_now().isoformat(timespec="seconds")}')
         return True
 
     def start(self, message):
@@ -167,17 +168,21 @@ class RunState:
         self._write_state({**self._read_state(), 'last_result': result, 'attention': attention})
         self.log(message)
 
-    def _lock_owner_alive(self):
+    def _locked(self):
+        # Reading a byte another handle has locked fails; reading never takes the lock itself
         try:
-            with open(self.lock_path, encoding='utf-8') as f:
-                pid = int(f.read().split()[0])
-        except (FileNotFoundError, ValueError, IndexError):
+            with open(self.lock_path, 'rb') as f:
+                f.read(1)
+        except FileNotFoundError:
             return False
-        return _pid_alive(pid)
+        except PermissionError:
+            return True
+        return False
 
     def release(self):
-        if os.path.exists(self.lock_path):
-            os.remove(self.lock_path)
+        self._lock.seek(0)
+        msvcrt.locking(self._lock.fileno(), msvcrt.LK_UNLCK, 1)
+        self._lock.close()
 
     def log(self, message):
         with open(self.log_path, 'a', encoding='utf-8') as f:
@@ -197,21 +202,7 @@ class RunState:
         os.replace(tmp, self.state_path)
 
 
-def _pid_alive(pid):
-    # Never os.kill(pid, 0) on Windows: there it terminates the process instead of probing it.
-    if os.name != 'nt':
-        try:
-            os.kill(pid, 0)
-            return True
-        except OSError:
-            return False
-    import ctypes
-    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-    if not handle:
-        return ctypes.get_last_error() == 5  # access denied: it exists, owned by someone else
-    try:
-        code = ctypes.c_ulong()
-        return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
-    finally:
-        kernel32.CloseHandle(handle)
+
+def _unfinished(saved):
+    # start() writes last_result null and finish() fills it, so null after a start means the run never finished
+    return bool(saved.get('last_run')) and saved.get('last_result') is None

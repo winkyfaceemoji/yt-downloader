@@ -61,7 +61,6 @@ class HubTests(unittest.TestCase):
             lines = f.read().splitlines()
         self.assertIn('started capture https://youtu.be/x mode=both music=yes', lines[0])
         self.assertIn('OK capture', lines[-1])
-        self.assertFalse(os.path.exists(os.path.join(self.logs, 'yt-downloader.lock')))
 
     def test_a_missing_transcript_needs_review(self):
         self.capture = FakeCapture(Outcome('saved', 'C:/x/Song [ID]', 'no English captions', [], transcript_found=False))
@@ -81,14 +80,13 @@ class HubTests(unittest.TestCase):
                          ['music not tagged: no confident MusicBrainz match for "Song" by X'])
 
 
-    def test_an_error_fails_the_run_with_the_reason_and_releases_the_lock(self):
+    def test_an_error_fails_the_run_with_the_reason(self):
         self.capture = FakeCapture(error=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden\nmore detail'))
         code, _ = self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
         self.assertEqual(code, 1)
         status = self.status()
         self.assertEqual((status['last_result'], status['busy']), ('failed', False))
         self.assertEqual(status['attention'], ['ERROR: unable to download video data: HTTP Error 403: Forbidden'])
-        self.assertFalse(os.path.exists(os.path.join(self.logs, 'yt-downloader.lock')))
         with open(status['log'], encoding='utf-8') as f:
             self.assertIn('FAILED capture u: ERROR: unable to download video data', f.read().splitlines()[-1])
 
@@ -99,35 +97,48 @@ class HubTests(unittest.TestCase):
         self.assertEqual(self.status()['attention'], ['rejected: that URL is a playlist'])
 
 
-    def lock_held_by(self, pid):
-        with open(os.path.join(self.logs, 'yt-downloader.lock'), 'w') as f:
-            f.write(f'{pid} 2026-11-07T10:00:00-05:00')
-
     def test_a_second_run_during_a_live_one_is_refused_with_4(self):
-        self.lock_held_by(os.getpid())  # this test process is alive
-        self.assertTrue(self.status()['busy'])
+        seen, outcome = {}, self.capture.outcome
+
+        def capture_that_checks(url, choice, **kwargs):  # runs while the first run holds the lock
+            seen['status'] = self.status()
+            seen['second'] = self.hub('run', 'capture', '--url', 'u2', '--mode', 'audio')[0]
+            return outcome
+
+        self.capture = capture_that_checks
         code, _ = self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
-        self.assertEqual((code, self.capture.calls), (4, []))
-        self.assertTrue(os.path.exists(os.path.join(self.logs, 'yt-downloader.lock')))
+        self.assertEqual((code, seen['second'], seen['status']['busy']), (0, 4, True))
+        self.assertFalse(self.status()['busy'])
 
 
-    def dead_pid(self):
-        process = subprocess.Popen([sys.executable, '-c', 'pass'])
-        process.wait()
-        return process.pid
+    def test_a_lock_file_that_is_only_open_elsewhere_does_not_block_or_crash_a_run(self):
+        # e.g. `status` reading it at that instant, or a file left empty
+        with open(os.path.join(self.logs, 'yt-downloader.lock'), 'w'):
+            code, _ = self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
+        self.assertEqual(code, 0)
 
-    def test_a_lock_left_by_a_dead_process_means_interrupted(self):
+
+    def killed_run(self):
+        # A real run in another process that dies mid-capture, as if killed or lost to a reboot
+        script = ('import os, hub; hub.run_capture("u", "a", False, logs_dir=os.environ["LOGS"], '
+                  'downloads_dir="C:/downloads", capture_fn=lambda *a, **k: os._exit(9))')
+        subprocess.run([sys.executable, '-c', script], env={**os.environ, 'LOGS': self.logs},
+                       cwd=os.path.dirname(os.path.abspath(__file__)), check=False)
+
+    def test_a_run_whose_process_died_means_interrupted(self):
         self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')  # an earlier run that finished
-        self.lock_held_by(self.dead_pid())                             # then one that was killed
+        self.killed_run()
         status = self.status()
         self.assertEqual((status['busy'], status['last_result']), (False, 'interrupted'))
         self.assertEqual(status['attention'], ['the last run stopped before finishing'])
 
-    def test_a_new_run_clears_a_dead_process_lock(self):
-        self.lock_held_by(self.dead_pid())
+    def test_a_new_run_after_a_killed_one_logs_it_and_runs(self):
+        self.killed_run()
         code, _ = self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
         self.assertEqual(code, 0)
         self.assertEqual(self.status()['last_result'], 'ok')
+        with open(os.path.join(self.logs, 'yt-downloader.log'), encoding='utf-8') as f:
+            self.assertIn('INTERRUPTED the previous run stopped before finishing', f.read())
 
 
     def test_ctrl_c_during_a_run_exits_130_and_records_interrupted(self):
@@ -136,7 +147,6 @@ class HubTests(unittest.TestCase):
         self.assertEqual(code, 130)
         status = self.status()
         self.assertEqual((status['busy'], status['last_result']), (False, 'interrupted'))
-        self.assertFalse(os.path.exists(os.path.join(self.logs, 'yt-downloader.lock')))
 
 
     def test_bad_arguments_exit_64_without_running(self):
