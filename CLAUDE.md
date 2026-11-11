@@ -14,7 +14,7 @@ hub.cmd log                    # path of Storage\_logs\yt-downloader.log
 python -m unittest -v          # offline tests (fakes + temp folders)
 ```
 
-`hub.cmd` exit codes, shared with Adam's other tools (ADR 0020): 0 ok, 1 failed, 3 needs review, 4 busy, 64 bad arguments, 130 interrupted.
+`hub.cmd` exit codes, shared with Adam's other tools (ADR 0021): 0 ok, 1 failed, 3 needs review, 4 busy, 64 bad arguments, 130 interrupted.
 
 Outside requirements.txt: **Node.js** (yt-dlp's JS runtime, for YouTube's signature challenge) and **ffmpeg** (audio tags and cover art, video merging) must be on PATH.
 
@@ -31,7 +31,7 @@ Outside requirements.txt: **Node.js** (yt-dlp's JS runtime, for YouTube's signat
   Area rules in `.claude/rules/` load when you touch these files.
 - Test each module only through its interface, with no network. yt-dlp comes in through `capture(..., ydl_factory=...)`, HTTP through `http_get`, and output through `downloads_dir`, so tests use fakes and temp folders. Write the failing test first.
 - Python 3.12+ syntax (nested quotes in f-strings). `requirements.txt` pins yt-dlp and mutagen; upgrade them on purpose (ADR 0009, 0018), and vet any new dependency against its upstream docs first.
-- Captures go to `Storage\Media\YouTube`, and the run log and state to `Storage\_logs` (ADR 0019, 0020). Both are Adam's backed-up data: tests always pass their own temp folders, and real runs use a throwaway video. `cookies.txt` is a login secret, git-ignored, and must never be committed.
+- Captures go to `Storage\Media\YouTube`, and the run log and state to `Storage\_logs` (ADR 0021, 0022). Both are Adam's backed-up data: tests always pass their own temp folders, and real runs use a throwaway video. `cookies.txt` is a login secret, git-ignored, and must never be committed.
 - Commit messages carry no Claude/Anthropic attribution trailers.
 
 ## Project-wide gotchas
@@ -58,5 +58,5 @@ Outside requirements.txt: **Node.js** (yt-dlp's JS runtime, for YouTube's signat
 - [0016. Identify the project to MusicBrainz by its repo URL](docs/adr/0016-musicbrainz-contact-is-repo-url.md)
 - [0017. Optional cookies.txt for every yt-dlp call](docs/adr/0017-optional-cookies-file.md)
 - [0018. mutagen writes the MusicBrainz tags](docs/adr/0018-mutagen-writes-musicbrainz-tags.md)
-- [0019. Captures go to Storage\Media\YouTube](docs/adr/0019-captures-go-to-storage-media-youtube.md) (supersedes 0006)
-- [0020. hub.cmd entry point and run state in Storage\_logs](docs/adr/0020-hub-cmd-and-run-state.md)
+- [0021. hub.cmd entry point and run state, with a held Windows lock](docs/adr/0021-hub-cmd-run-state-held-lock.md) (supersedes 0020)
+- [0022. Captures go to Storage\Media\YouTube; re-runs keep old media and follow renamed titles](docs/adr/0022-re-runs-keep-media-and-follow-renames.md) (supersedes 0019)

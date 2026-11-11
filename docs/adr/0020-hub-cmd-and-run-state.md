@@ -1,6 +1,6 @@
 # 0020. hub.cmd entry point and run state in Storage\_logs
 
-Status: Accepted (2026-11-07)
+Status: Superseded by 0021
 
 ## Context
 Adam's data hub (a Steam-like library of his tools) launches every tool through that tool's own `hub.cmd`, under one shared contract:

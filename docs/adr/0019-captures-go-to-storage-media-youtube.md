@@ -1,6 +1,6 @@
 # 0019. Captures go to Storage\Media\YouTube
 
-Status: Accepted (2026-11-07). Supersedes 0006.
+Status: Superseded by 0022
 
 ## Context
 ADR 0006 put each video's folder in `Downloads/` next to `main.py`. That folder is outside `C:\Users\choua\Documents\Storage`, so the server sync never backed it up. The data hub now launches this tool; the hub never chooses folders, so each tool decides where its output goes.

@@ -10,7 +10,7 @@ paths:
 - The interface is `lookup(info, http_get) -> (match | None, note)` and `tag_audio(path, match, http_get) -> (tagged, note)`. `http_get(url) -> bytes` is the seam; tests pass a fake. Neither function raises for network, data or tagging problems: a run must never lose its download over MusicBrainz.
 - **Only confident matches** (ADR 0015). The title (after `_clean`), one credited artist, and the length within `MAX_LENGTH_GAP` seconds must all match. If they don't, the result is `None`, and the audio keeps yt-dlp's tags and YouTube thumbnail.
 - **Release ranking across all confident recordings** (ADR 0015): studio album, then any other non-compilation release, then a compilation; earliest date within a tier.
-- `match` is stored as-is in `data.json`'s `musicbrainz` field. Other projects read it, so treat key changes as breaking.
+- `match` is stored as-is in `data.json`'s `musicbrainz` field. Other projects read it, so treat key changes as breaking. The field has three states: missing (music not requested, or no audio), `null` (no confident match), or the match. Readers must use `data.get('musicbrainz')`.
 - The production `http_get` sends the repo-URL User-Agent and waits at least 1 s between requests (ADR 0016). MusicBrainz blocks clients that skip either. Cover Art Archive calls go through the same function.
 - Only `.m4a` is tagged, through mutagen, using iTunes freeform names (`MusicBrainz Track Id` = recording ID, `MusicBrainz Album Id` = release ID, and so on, as Picard writes them) (ADR 0018).
 

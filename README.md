@@ -18,7 +18,7 @@ C:\Users\choua\Documents\Storage\Media\YouTube\     ← backed up by the server 
     └── <title> [<id>].mp4         ← if you chose video
 ```
 
-Running the same video again replaces its folder's contents. Playlist links are rejected; a link to a video inside a playlist or mix downloads just that video.
+Running the same video again rewrites `data.json` and the transcript and re-downloads the media you choose; media you don't choose this time stay. If the video was renamed, its folder is renamed to the new title. Playlist links are rejected; a link to a video inside a playlist or mix downloads just that video.
 
 ## Setup
 
@@ -77,7 +77,6 @@ Tests (offline, no YouTube needed): `python -m unittest -v`
 - **`Incomplete data received … Giving up after 3 retries`**: harmless. YouTube sent an incomplete page of comments, so you may get slightly fewer than 1000.
 - **`n challenge solving failed: Some formats may be missing`**: harmless; the audio still downloads.
 - **A very long title fails to save**: Windows limits paths to 260 characters, and the title appears in both the folder and file names. Titles over about 88 characters can hit it.
-- **"Another yt-downloader run is in progress"** when nothing is running: the last run's process was killed while it held its lock, and a new process happens to have reused its ID. Delete `Storage\_logs\yt-downloader.lock`.
 - **Audio/video fails after downloading**: ffmpeg isn't on your PATH.
 
 Design decisions are recorded in [docs/adr/](docs/adr/).

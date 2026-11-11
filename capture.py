@@ -2,7 +2,7 @@
 
     capture(url, choice, *, as_music=False, ydl_factory=yt_dlp.YoutubeDL, downloads_dir,
             naming_opts=None, http_get=music.http_get, cookies_file=None)
-        -> Outcome(status, folder, transcript_note, actions)
+        -> Outcome(status, folder, transcript_note, actions, transcript_found, music_tagged, music_note)
 
 Runs one video end to end: peek at the URL (rejecting playlists), fetch metadata and
 comments, fetch the English transcript, save data.json/transcript.txt, then download the
