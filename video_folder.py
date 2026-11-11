@@ -41,8 +41,11 @@ class VideoFolder:
         actions = []
         old = self._renamed_from(info, folder)
         if old:
-            os.rename(old, folder)
-            actions.append(f'renamed folder from "{os.path.basename(old)}"')
+            try:
+                os.rename(old, folder)
+                actions.append(f'renamed folder from "{os.path.basename(old)}"')
+            except OSError as e:  # e.g. a file in it is open; never lose this run's data over it
+                actions.append(f'could not rename folder "{os.path.basename(old)}": {e.strerror}')
         os.makedirs(folder, exist_ok=True)
         with open(os.path.join(folder, 'data.json'), 'w') as f:
             json.dump(video_data, f, indent=4)

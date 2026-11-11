@@ -135,6 +135,8 @@ class RunState:
     def status(self):
         saved = self._read_state()
         busy = self._locked()
+        if _unfinished(saved) and not busy:
+            saved = self._read_state()  # it may have finished between the two reads
         result, attention = saved.get('last_result'), saved.get('attention', [])
         if _unfinished(saved) and not busy:  # the run's process died without finishing
             result, attention = 'interrupted', ['the last run stopped before finishing']

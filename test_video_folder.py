@@ -59,6 +59,15 @@ class VideoFolderTests(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(new, 'Sins Of The Father [ZVeQQHEkcAk].m4a')))
         self.assertEqual(actions[0], 'renamed folder from "Sins Of The Father [ZVeQQHEkcAk]"')
 
+    def test_a_rename_that_windows_refuses_still_saves_the_data(self):
+        folder = VideoFolder(self.root)
+        old, _ = folder.save(INFO, {}, None)
+        with open(os.path.join(old, 'Sins Of The Father [ZVeQQHEkcAk].m4a'), 'w'):  # e.g. playing in a music player
+            new, actions = folder.save({**INFO, 'title': 'New Title'}, {'id': INFO['id']}, None)
+        with open(os.path.join(new, 'data.json')) as f:
+            self.assertEqual(json.load(f), {'id': INFO['id']})
+        self.assertTrue(actions[0].startswith('could not rename folder "Sins Of The Father [ZVeQQHEkcAk]"'))
+
     def test_a_renamed_video_with_two_folders_already_leaves_both(self):
         folder = VideoFolder(self.root)
         folder.save(INFO, {}, None)

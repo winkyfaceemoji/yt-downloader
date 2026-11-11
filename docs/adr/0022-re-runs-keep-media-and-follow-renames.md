@@ -12,7 +12,7 @@ From 0019, unchanged:
 
 Changed:
 - **A re-run keeps media it doesn't download again.** It rewrites `data.json` and `transcript.txt` (or removes a stale one) and overwrites the media it downloads. An audio-only re-run keeps the old `.mp4`; a `.webm` and a later `.m4a` both stay.
-- **A renamed video keeps one folder.** When the folder for the current title doesn't exist and exactly one other folder ends in `[<id>]`, the re-run renames it to the current title. Media inside keep their old names until downloaded again.
+- **A renamed video keeps one folder.** When the folder for the current title doesn't exist and exactly one other folder ends in `[<id>]`, the re-run renames it to the current title. Media inside keep their old names, so a new download under the new title sits next to the old file rather than replacing it. If Windows refuses the rename (a file in it is open), the run notes that and saves to a new folder instead of failing.
 
 Rejected: deleting media a re-run didn't download (the folder always matches the last capture, but a metadata-only refresh would delete the audio from the backed-up library), and naming folders by ID only (breaks the readable `<title> [<id>]` name).
 

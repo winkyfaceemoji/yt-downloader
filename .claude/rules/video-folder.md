@@ -10,7 +10,7 @@ paths:
 - **One naming config.** The folder name (`path`) and the media file names (`media_opts`) both come from `naming_opts`, so a sanitising option such as `restrictfilenames` can't split one video across two folders (ADR 0012). Never build these paths by hand.
 - **Fixed data names, titled media** (ADR 0007). Code reads `<folder>/data.json`, and the JSON's `title` and `id` identify the video. Media keep `<title> [<id>].<ext>` so they're recognisable outside the folder, e.g. on a music player.
 - **Re-runs overwrite what they write, and keep other media** (ADR 0022). `media_opts()` sets `overwrites`, `save` rewrites `data.json`, and a run with no transcript removes the old `transcript.txt` so it matches `data.json`. Media the re-run didn't download stay.
-- **A renamed video keeps one folder** (ADR 0022). `save` renames the video's one other `* [<id>]` folder to the current title when the new folder doesn't exist yet. With two or more, it renames nothing.
+- **A renamed video keeps one folder** (ADR 0022). `save` renames the video's one other `* [<id>]` folder to the current title when the new folder doesn't exist yet. With two or more, it renames nothing. A refused rename (a file in the old folder is open) becomes an action note, never an error: `save` runs before `data.json` exists, so raising there would lose the run's metadata. The `[<id>]` suffix match relies on YouTube IDs surviving sanitising unchanged.
 - The base folder is `C:\Users\choua\Documents\Storage\Media\YouTube` (`hub.DOWNLOADS_DIR`, ADR 0022), passed in as `downloads_dir`. This module never picks it.
 
 ## Gotchas

@@ -14,6 +14,7 @@ paths:
 - **The held lock is the single source of "busy"** (ADR 0021). `acquire` locks byte 0 of `yt-downloader.lock` with `msvcrt.locking`; Windows frees it on `release` (in `finally`) or when the process ends, however it ends. A run refused with exit 4 never releases. The file stays between runs.
 - **Interrupted comes from the state file**: `last_run` set, `last_result` null and nobody holding the lock. `start` writes the null and `finish` fills it, so every path out of a run must call `finish` or die.
 - **`needs_review` is defined here** (`_missing`): no transcript, or music requested but `music_tagged is False`. It relies on `capture()`'s `transcript_found`, `music_tagged` and `music_note`; keep those accurate.
+- **`main.py` must not import `capture` at the top.** Its `capture` wrapper loads it only when a capture runs, so `status` and `log` skip yt-dlp (about 1.3 s). `MainTests` checks yt-dlp isn't loaded.
 - **Bad arguments exit 64.** `_Parser.error` raises `UsageError` instead of argparse's default `SystemExit(2)`.
 - **`hub.cmd` calls siblings by full path** (`"%~dp0.venv\Scripts\python.exe" "%~dp0main.py"`). A bare call failed for the books converter even after `cd /d`. It has no `pause`, and `exit /b %errorlevel%` passes the code through.
 
