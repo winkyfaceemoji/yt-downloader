@@ -200,6 +200,25 @@ class HubTests(unittest.TestCase):
         self.assertEqual(text.splitlines()[-4:], ['Saved to: C:/x/Song [ID]', 'Transcript: no English captions',
                                                   '  - wrote data.json', 'Needs review: no transcript: no English captions'])
 
+    def test_the_storage_folders_must_be_passed_so_tests_never_fall_back_to_them(self):
+        with self.assertRaises(TypeError):
+            hub.main(['status'], capture_fn=self.capture)
+        with self.assertRaises(TypeError):
+            hub.run_capture('u', 'a', False, capture_fn=self.capture)
+
+
+class MainTests(unittest.TestCase):
+    def test_arguments_go_to_the_hub_without_prompting_or_loading_yt_dlp(self):
+        # Bad arguments exit 64 before any folder is touched, so this never reads Storage
+        script = ('import runpy, sys\n'
+                  'sys.argv = ["main.py", "frobnicate"]\n'
+                  'try:\n    runpy.run_path("main.py", run_name="__main__")\n'
+                  'except SystemExit as e:\n    print("exit", e.code, "yt_dlp loaded:", "yt_dlp" in sys.modules)\n')
+        p = subprocess.run([sys.executable, '-c', script], stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                           cwd=os.path.dirname(os.path.abspath(__file__)), timeout=60)
+        self.assertNotIn('Input the Youtube URL', p.stdout)
+        self.assertEqual(p.stdout.strip().splitlines()[-1], 'exit 64 yt_dlp loaded: False')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -28,7 +28,7 @@ EXIT_OK, EXIT_FAILED, EXIT_NEEDS_REVIEW, EXIT_BUSY, EXIT_USAGE, EXIT_INTERRUPTED
 MODES = {'audio': 'a', 'video': 'v', 'both': 'b'}
 
 
-def main(argv, *, capture_fn, logs_dir=LOGS_DIR, downloads_dir=DOWNLOADS_DIR, cookies_file=None, out=None):
+def main(argv, *, capture_fn, logs_dir, downloads_dir, cookies_file=None, out=None):
     out = out or sys.stdout
     try:
         args = _Parser(prog='hub.cmd').parse(argv)
@@ -47,8 +47,7 @@ def main(argv, *, capture_fn, logs_dir=LOGS_DIR, downloads_dir=DOWNLOADS_DIR, co
                        downloads_dir=downloads_dir, cookies_file=cookies_file, out=out)
 
 
-def run_capture(url, choice, as_music, *, capture_fn, logs_dir=LOGS_DIR, downloads_dir=DOWNLOADS_DIR,
-                cookies_file=None, out=None):
+def run_capture(url, choice, as_music, *, capture_fn, logs_dir, downloads_dir, cookies_file=None, out=None):
     """Capture one video under the run lock, recording the result. Returns an exit code."""
     out = out or sys.stdout
     state = RunState(logs_dir)
