@@ -143,3 +143,22 @@ How findings were checked: each one was read in the code. The Windows behaviour 
 - Transcript line-breaking quality and MusicBrainz match quality on real videos.
 - The Windows path limit (already recorded in ADR 0007 and 0019) and `cookies.txt` (not opened).
 - A security review.
+
+## Follow-up (2026-11-11, branch `fix/architecture-review`)
+
+| # | Outcome |
+|---|---|
+| 1 | No code change. The data hub already quotes every argument (data-hub `core.command_line`). The hub rule now says callers must quote `--url`. |
+| 2 | Fixed. State writes retry for about 2 s while a reader has the file open. The lock file is no longer deleted. |
+| 3 | Fixed by a held Windows lock (ADR 0021, supersedes 0020). "Interrupted" now comes from an unfinished state file. |
+| 4 | Resolved in the docs. Re-runs keep media they don't download again (ADR 0022, supersedes 0019; README and rule updated). |
+| 5 | Fixed. A re-run renames the video's one old `* [<id>]` folder to the new title. A refused rename becomes a note, not a failure. |
+| 6 | Fixed. A missing logs folder is created, and an unreadable state file shows in `attention`. |
+| 7 | Fixed. `main.py` loads `capture` only for a capture. |
+| 8 | No code change. The data hub plans to stop runs with a process kill (data-hub ADR 0004). Noted in the hub rule. |
+| 9 | Fixed. A subprocess test runs `main.py` with bad arguments and closed stdin. |
+| 10 | Fixed. `hub.main` and `run_capture` require their folders. |
+| 11 | Documented in `CONTEXT.md` and the music rule. |
+| 12 | Fixed: the capture rule, the `capture.py` docstring and the video-folder rule. |
+
+Known and left alone: a `status` read that lands mid-replace of `state.json` could still raise; the first lines of `start` sit outside the `try`; a run started on the old code and still going when this lands isn't seen as busy.
