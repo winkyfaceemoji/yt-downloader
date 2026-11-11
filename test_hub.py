@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 
 import hub
@@ -116,6 +117,15 @@ class HubTests(unittest.TestCase):
         with open(os.path.join(self.logs, 'yt-downloader.lock'), 'w'):
             code, _ = self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
         self.assertEqual(code, 0)
+
+
+    def test_a_run_finishes_while_status_has_its_state_file_open(self):
+        # Windows refuses to replace a file another process has open, e.g. a `status` reading it
+        self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
+        reader = open(os.path.join(self.logs, 'yt-downloader.state.json'), encoding='utf-8')
+        threading.Timer(0.3, reader.close).start()
+        code, _ = self.hub('run', 'capture', '--url', 'u', '--mode', 'audio')
+        self.assertEqual((code, self.status()['last_result']), (0, 'ok'))
 
 
     def killed_run(self):

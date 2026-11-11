@@ -14,6 +14,7 @@ import json
 import msvcrt
 import os
 import sys
+import time
 
 TOOL = 'yt-downloader'
 
@@ -199,6 +200,12 @@ class RunState:
         tmp = self.state_path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(state, f)
+        for _ in range(20):  # Windows can't replace a file a `status` has open this instant; retry ~2 s
+            try:
+                os.replace(tmp, self.state_path)
+                return
+            except PermissionError:
+                time.sleep(0.1)
         os.replace(tmp, self.state_path)
 
 
